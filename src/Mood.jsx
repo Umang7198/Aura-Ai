@@ -1,162 +1,134 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
-
-// -------------------
-// Fallback Data
-// -------------------
-const fallbackData = {
-  success: true,
-  location: "Mumbai, India",
-  mood: {
-    sentiment_score: -0.1,
-    emotion: "mixed",
-    summary:
-      "Mumbai is feeling a bit moody with rain showers and traffic frustration 🌧️.",
-  },
-  trending: [
-    { city: "Delhi", emotion: "positive" },
-    { city: "Bangalore", emotion: "neutral" },
-    { city: "London", emotion: "negative" },
-  ],
-  best_vibes: [
-    { city: "Tokyo", emotion: "positive" },
-    { city: "Sydney", emotion: "positive" },
-    { city: "San Francisco", emotion: "positive" },
-  ],
-};
+import { useNavigate } from "react-router-dom";
+import Navbar from "./Navbar";
 
 // Utility for emotion color
-const getEmotionColor = (emotion) => {
-  switch (emotion) {
+const getEmotionColor = (mood) => {
+  if (!mood) return "text-gray-400";
+  switch (mood.toLowerCase()) {
     case "positive":
-      return "text-green-500";
+    case "very positive":
+    case "slightly positive":
+      return "text-green-400";
     case "negative":
-      return "text-red-500";
-    case "mixed":
-      return "text-orange-500";
+    case "very negative":
+      return "text-red-400";
     case "neutral":
-      return "text-gray-400";
-    default:
       return "text-gray-300";
+    default:
+      return "text-orange-400";
   }
 };
 
 function Mood() {
-  const [feed, setFeed] = useState(null);
-  const [subscriptions, setSubscriptions] = useState([]);
+  const [cities, setCities] = useState([]);
+  const [loadingMsg, setLoadingMsg] = useState("");
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Try getting user location
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          axios
-            .get(
-              `http://localhost:8000/api/v1/vibes/feed?lat=${latitude}&lon=${longitude}`
-            )
-            .then((res) => {
-              if (res.data.success) {
-                setFeed(res.data);
-              } else {
-                setFeed(fallbackData);
-              }
-            })
-            .catch(() => setFeed(fallbackData));
-        },
-        () => {
-          // If user blocks location → fallback
-          setFeed(fallbackData);
-        }
-      );
-    } else {
-      setFeed(fallbackData);
-    }
-  }, []);
+    const fetchData = localStorage.getItem("aura_fetch_data");
+    const moodData = localStorage.getItem("aura_mood_data");
 
-  if (!feed) return <div className="p-6 text-white">Loading mood feed...</div>;
-
-  const handleSubscribe = (city) => {
-    if (!subscriptions.includes(city)) {
-      setSubscriptions([...subscriptions, city]);
+    // ✅ If not available → warn + redirect
+    if (!fetchData || !moodData) {
+      setLoadingMsg("⚠️ First fetch all vibes!");
+      setTimeout(() => navigate("/"), 3000);
+      return;
     }
-  };
+
+    try {
+      const raw = JSON.parse(moodData) || {};
+      setCities(raw.data || []);
+    } catch (err) {
+      console.error("Failed to load aura_mood_data:", err);
+      setCities([]);
+    }
+  }, [navigate]);
+
+  if (loadingMsg) {
+    return (
+      <div className="min-h-screen text-white flex items-center justify-center">
+        {loadingMsg}
+      </div>
+    );
+  }
+
+  if (!cities || cities.length === 0) {
+    return (
+      <div className="min-h-screen text-white flex items-center justify-center">
+        ⚠️ No mood data found. Please Get All The Vibes first.
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-zinc-900 text-white p-6 flex flex-col gap-8">
-      {/* Current Location Mood */}
-      <div className="bg-zinc-800 p-6 rounded-2xl shadow-lg max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold mb-2">📍 {feed.location}</h1>
-        <p className={`text-lg font-semibold ${getEmotionColor(feed.mood.emotion)}`}>
-          {feed.mood.emotion.toUpperCase()} • Score: {feed.mood.sentiment_score}
-        </p>
-        <p className="text-zinc-300 mt-4 text-lg">{feed.mood.summary}</p>
-      </div>
+    <div className="min-h-screen text-white flex flex-col">
+      {/* Navbar */}
+      <Navbar />
 
-      {/* Trending Headlines */}
-      <div className="bg-zinc-800 p-6 rounded-2xl shadow-lg max-w-5xl mx-auto w-full">
-        <h2 className="text-2xl font-bold mb-4">🔥 Trending Mood Headlines</h2>
-        <ul className="space-y-3">
-          {feed.trending.map((trend, idx) => (
-            <li
-              key={idx}
-              className="flex justify-between border-b border-zinc-700 pb-2"
-            >
-              <span>{trend.city}</span>
-              <span className={`font-semibold ${getEmotionColor(trend.emotion)}`}>
-                {trend.emotion}
-              </span>
-              <button
-                onClick={() => handleSubscribe(trend.city)}
-                className="ml-4 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm"
-              >
-                Subscribe
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Best Vibe Cities */}
-      <div className="bg-zinc-800 p-6 rounded-2xl shadow-lg max-w-5xl mx-auto w-full">
-        <h2 className="text-2xl font-bold mb-4">🌍 Best Vibe Cities Right Now</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {feed.best_vibes.map((city, idx) => (
+      {/* Top spacing */}
+      <div className="mt-20 px-6 flex flex-col gap-8">
+        {/* Mood Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {cities.map((city, idx) => (
             <div
               key={idx}
-              className="bg-zinc-700 p-4 rounded-xl text-center shadow-md"
+              className="p-6 rounded-2xl shadow-lg bg-black/30 backdrop-blur-md"
             >
-              <h3 className="text-xl font-semibold">{city.city}</h3>
-              <p className={`mt-2 ${getEmotionColor(city.emotion)}`}>
-                {city.emotion}
+              {/* Header */}
+              <h2 className="text-2xl font-bold mb-2">{city.city}</h2>
+              <p className="text-sm text-zinc-400 mb-2">
+                {new Date(city.timestamp).toLocaleString()}
               </p>
-              <button
-                onClick={() => handleSubscribe(city.city)}
-                className="mt-3 px-3 py-1 bg-teal-600 hover:bg-teal-700 rounded-lg text-sm"
+
+              {/* Mood */}
+              <p
+                className={`text-lg font-semibold flex items-center gap-2 ${getEmotionColor(
+                  city.mood_metrics?.mood_label
+                )}`}
               >
-                Subscribe
-              </button>
+                {city.mood_metrics?.mood_label}{" "}
+                {city.mood_metrics?.mood_emoji || "🤔"}
+                • Score: {city.mood_metrics?.avg_sentiment?.toFixed(2)}
+              </p>
+
+              {/* Headline */}
+              <p className="mt-2 italic text-indigo-300">“{city.headline}”</p>
+
+              {/* Weather */}
+              {city.weather && (
+                <div className="mt-3 text-sm text-zinc-300">
+                  🌦 {city.weather.temperature_c}°C • {city.weather.condition}
+                  <br />
+                  💨 {city.weather.wind_kph} km/h • Humidity:{" "}
+                  {city.weather.humidity}%
+                </div>
+              )}
+
+              {/* Trending topics */}
+              <div className="mt-4">
+                <h3 className="text-sm font-bold mb-1">📈 Trending</h3>
+                <div className="flex flex-wrap gap-2">
+                  {(city.trending_topics || []).map((topic, tIdx) => (
+                    <span
+                      key={tIdx}
+                      className="px-3 py-1 bg-indigo-600/60 rounded-full text-xs shadow"
+                    >
+                      #{topic}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Data Quality */}
+              <p className="text-xs text-zinc-500 mt-3">
+                Confidence: {city.confidence} • Sample: {city.sample_size} •{" "}
+                Quality: {city.data_quality}
+              </p>
             </div>
           ))}
         </div>
       </div>
-
-      {/* Subscriptions */}
-      {subscriptions.length > 0 && (
-        <div className="bg-zinc-800 p-6 rounded-2xl shadow-lg max-w-5xl mx-auto w-full">
-          <h2 className="text-2xl font-bold mb-4">🔔 Your Subscriptions</h2>
-          <ul className="flex flex-wrap gap-3">
-            {subscriptions.map((city, idx) => (
-              <li
-                key={idx}
-                className="px-4 py-2 bg-indigo-700 rounded-lg shadow-md"
-              >
-                {city}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }

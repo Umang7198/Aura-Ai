@@ -1,145 +1,141 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom"; // For dynamic city routes
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
-// -------------------
-// Fallback data
-// -------------------
-const fallbackData = {
-  success: true,
-  city: "Delhi",
-  country: "India",
-  current_vibe: {
-    sentiment_score: 0.72,
-    emotion: "positive",
-    summary:
-      "Delhi is buzzing with positivity today 🌞 fueled by cricket wins and great weather.",
-  },
-  weather: {
-    temperature: "32°C",
-    condition: "Sunny",
-  },
-  top_sources: {
-    tweets: [
-      { user: "@raj", text: "Delhi vibes are amazing today!" },
-      { user: "@aura", text: "The city is glowing with festive energy 🎉" },
-    ],
-    news: [
-      {
-        headline: "Delhi celebrates cricket victory",
-        url: "https://newsapi.org/example",
-      },
-      {
-        headline: "Festivals bring cheerful energy to Delhi streets",
-        url: "https://newsapi.org/example2",
-      },
-    ],
-  },
-};
-
-// -------------------
-// Utility: color by emotion
-// -------------------
-const getEmotionColor = (emotion) => {
-  switch (emotion) {
+// Utility: emoji by mood
+const getMoodEmoji = (mood) => {
+  switch (mood?.toLowerCase()) {
     case "positive":
-      return "text-green-500";
+      return "😀";
     case "negative":
-      return "text-red-500";
-    case "mixed":
-      return "text-orange-500";
+      return "😡";
+    case "neutral":
+      return "😐";
     default:
-      return "text-gray-400";
+      return "🤔";
   }
 };
 
 function City() {
-  const { city_name } = useParams(); // e.g. /city/Delhi
+  const { city_name } = useParams();
+  const navigate = useNavigate();
   const [cityData, setCityData] = useState(null);
+  const [headline, setHeadline] = useState("");
 
   useEffect(() => {
+    // get all saved vibes from localStorage
+    const raw = JSON.parse(localStorage.getItem("aura_fetch_data")) || {};
+    const storedData = raw.data || []; // ✅ fix here
+
+    // find current city
+    const foundCity = storedData.find(
+      (c) => c.city.toLowerCase() === city_name.toLowerCase()
+    );
+
+    if (!foundCity) {
+      alert(`⚠️ No data found for ${city_name}. Please Get All The Vibes first.`);
+      setTimeout(() => navigate("/"), 3000);
+      return;
+    }
+
+    setCityData(foundCity);
+
+    // call backend to generate single headline
     axios
-      .get(`http://localhost:8000/api/v1/vibes/city/${city_name || "Delhi"}`)
+      .post("/api/headlines/generate-single", foundCity)
       .then((res) => {
-        if (res.data.success) {
-          setCityData(res.data);
-        } else {
-          setCityData(fallbackData);
+        if (typeof res.data === "string") {
+          setHeadline(res.data);
+        } else if (res.data.enhanced_headline) {
+          setHeadline(res.data.enhanced_headline);
         }
       })
-      .catch(() => {
-        setCityData(fallbackData);
+      .catch((err) => {
+        console.error("Headline generation failed:", err);
+        setHeadline("✨ Couldn’t generate headline, but vibes are still alive!");
       });
-  }, [city_name]);
+  }, [city_name, navigate]);
 
-  if (!cityData) return <div className="p-6 text-white">Loading...</div>;
+  if (!cityData) {
+    return (
+      <div className="min-h-screen text-white flex items-center justify-center">
+        Loading city data...
+      </div>
+    );
+  }
 
-  const { city, country, current_vibe, weather, top_sources } = cityData;
-
-  // Share button handler
-  const handleShare = async () => {
-    const shareText = `${city}, ${country} Vibes 🌐\n${current_vibe.summary}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Aura.AI - ${city} Vibes`,
-          text: shareText,
-          url: window.location.href,
-        });
-      } catch (err) {
-        console.log("Share cancelled", err);
-      }
-    } else {
-      alert("Sharing not supported in this browser.");
-    }
-  };
+  const {
+    city,
+    weather = {},
+    news = [],
+    tweets = [],
+    trending_topics = [],
+    mood_summary = {},
+  } = cityData;
 
   return (
-    <div className="min-h-screen bg-zinc-900 text-white p-6 flex flex-col gap-8">
+    <div className="min-h-screen text-white p-6 flex flex-col gap-8">
+      {/* Navbar */}
+      <nav className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-extrabold">🌐 Aura.AI</h1>
+        <a
+          href="/vibe"
+          className="px-4 py-2 bg-zinc-800 rounded-xl hover:bg-zinc-700 transition"
+        >
+          ⬅ Back
+        </a>
+      </nav>
+
       {/* City Header */}
       <div className="text-center">
-        <h1 className="text-4xl font-extrabold mb-2">
-          {city}, {country}
-        </h1>
-        <p className={`text-lg font-semibold ${getEmotionColor(current_vibe.emotion)}`}>
-          {current_vibe.emotion.toUpperCase()} • Score: {current_vibe.sentiment_score}
+        <h1 className="text-4xl font-extrabold mb-2">{city}</h1>
+        <p className="text-lg font-semibold">
+          {mood_summary.mood_label || "Unknown"} {getMoodEmoji(mood_summary.mood_label)}
+          {" • Score: "}
+          {mood_summary.avg_sentiment?.toFixed(2) || 0}
         </p>
       </div>
 
-      {/* Summary */}
-      <div className="bg-zinc-800 p-6 rounded-2xl shadow-lg max-w-3xl mx-auto">
-        <h2 className="text-2xl font-bold mb-4">✨ City Vibe Summary</h2>
-        <p className="text-zinc-300 text-lg">{current_vibe.summary}</p>
-      </div>
+      {/* Headline */}
+      {headline && (
+        <div className="text-center">
+          <p className="text-2xl font-bold text-indigo-400">📰 {headline}</p>
+        </div>
+      )}
 
       {/* Weather */}
-      <div className="flex flex-col md:flex-row gap-6 justify-center">
-        <div className="bg-zinc-800 p-6 rounded-2xl shadow-lg w-64">
+      <div className="flex justify-center">
+        <div className="p-6 rounded-2xl shadow-lg w-72 bg-black/30 backdrop-blur-md">
           <h3 className="text-xl font-semibold mb-2">🌦 Weather</h3>
-          <p>{weather.temperature} • {weather.condition}</p>
+          <p>{weather.temperature_c}°C • {weather.condition}</p>
+          <p className="text-sm text-zinc-400">
+            Humidity: {weather.humidity}% • Wind: {weather.wind_kph} km/h
+          </p>
         </div>
       </div>
 
       {/* Tweets & News */}
-      <div className="grid md:grid-cols-2 gap-6 max-w-5xl mx-auto">
+      <div className="grid md:grid-cols-2 gap-6 max-w-5xl mx-auto w-full">
         {/* Tweets */}
-        <div className="bg-zinc-800 p-6 rounded-2xl shadow-lg">
+        <div className="p-6 rounded-2xl shadow-lg bg-black/30 backdrop-blur-md">
           <h3 className="text-xl font-bold mb-4">🐦 Live Tweets</h3>
-          <ul className="space-y-3">
-            {top_sources.tweets.map((tweet, idx) => (
+          <ul className="space-y-3 max-h-96 overflow-y-auto">
+            {(tweets || []).map((tweet, idx) => (
               <li key={idx} className="border-b border-zinc-700 pb-2">
-                <span className="text-indigo-400 font-semibold">{tweet.user}:</span>{" "}
-                <span>{tweet.text}</span>
+                <p>{tweet.text}</p>
+                <p className="text-sm text-zinc-400">
+                  👍 {tweet.like_count || 0} • 🔁 {tweet.retweet_count || 0}
+                </p>
               </li>
             ))}
           </ul>
         </div>
 
         {/* News */}
-        <div className="bg-zinc-800 p-6 rounded-2xl shadow-lg">
+        <div className="p-6 rounded-2xl shadow-lg bg-black/30 backdrop-blur-md">
           <h3 className="text-xl font-bold mb-4">📰 News</h3>
-          <ul className="space-y-3">
-            {top_sources.news.map((article, idx) => (
+          <ul className="space-y-3 max-h-96 overflow-y-auto">
+            {(news || []).map((article, idx) => (
               <li key={idx} className="border-b border-zinc-700 pb-2">
                 <a
                   href={article.url}
@@ -147,7 +143,7 @@ function City() {
                   rel="noopener noreferrer"
                   className="text-blue-400 hover:underline"
                 >
-                  {article.headline}
+                  {article.title}
                 </a>
               </li>
             ))}
@@ -155,14 +151,19 @@ function City() {
         </div>
       </div>
 
-      {/* Share Button */}
-      <div className="flex justify-center mt-6">
-        <button
-          onClick={handleShare}
-          className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-2xl text-lg font-semibold shadow-lg transition"
-        >
-          📤 Share City Vibes
-        </button>
+      {/* Trending Topics */}
+      <div className="max-w-3xl mx-auto p-6 rounded-2xl shadow-lg bg-black/30 backdrop-blur-md">
+        <h3 className="text-xl font-bold mb-4">📈 Trending Topics</h3>
+        <div className="flex flex-wrap gap-3">
+          {(trending_topics || []).map((topic, idx) => (
+            <span
+              key={idx}
+              className="px-4 py-2 bg-indigo-600 rounded-full text-sm shadow"
+            >
+              #{topic}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );

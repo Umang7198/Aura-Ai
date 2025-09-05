@@ -1,141 +1,141 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-  BarChart,
-  Bar,
-} from "recharts";
 
-// -------------------
-// Fallback Data
-// -------------------
-const fallbackData = {
-  success: true,
-  city: "Delhi",
-  historical: [
-    { date: "2025-08-14", score: 0.5, weather: "Sunny" },
-    { date: "2025-08-15", score: 0.7, weather: "Cloudy" },
-    { date: "2025-08-16", score: 0.4, weather: "Rainy" },
-    { date: "2025-08-17", score: 0.6, weather: "Sunny" },
-    { date: "2025-08-18", score: 0.3, weather: "Stormy" },
-    { date: "2025-08-19", score: 0.55, weather: "Cloudy" },
-    { date: "2025-08-20", score: 0.75, weather: "Sunny" },
-  ],
-  forecast: [
-    { date: "2025-08-21", predicted_score: 0.65, emotion: "positive" },
-    { date: "2025-08-22", predicted_score: 0.6, emotion: "positive" },
-    { date: "2025-08-23", predicted_score: 0.45, emotion: "mixed" },
-  ],
-};
-
-// Utility: color based on emotion
-const getColor = (emotion) => {
-  switch (emotion) {
+// Utility: emoji by mood
+const getMoodEmoji = (mood) => {
+  switch (mood?.toLowerCase()) {
     case "positive":
-      return "green";
+    case "very positive":
+      return "😀";
     case "negative":
-      return "red";
-    case "mixed":
-      return "orange";
+    case "very negative":
+      return "😡";
+    case "neutral":
+      return "😐";
     default:
-      return "gray";
+      return "🤔";
   }
 };
 
 function Trend() {
-  const { city_name } = useParams(); // /trend/Delhi
-  const [trendData, setTrendData] = useState(null);
+  const { city_name } = useParams();
+  const navigate = useNavigate();
+  const [cityData, setCityData] = useState(null);
 
   useEffect(() => {
+    // check local storage
+    const raw = JSON.parse(localStorage.getItem("aura_mood_data")) || {};
+    const storedData = raw.data || [];
+
+    const foundCity = storedData.find(
+      (c) => c.city.toLowerCase() === city_name.toLowerCase()
+    );
+
+    if (!foundCity) {
+      alert(`⚠️ No trend data for ${city_name}. Please Get All The Vibes first.`);
+      setTimeout(() => navigate("/"), 3000);
+      return;
+    }
+
+    setCityData(foundCity);
+
+    // Try API (optional override)
     axios
-      .get(`http://localhost:8000/api/v1/vibes/trends/${city_name || "Delhi"}?range=7d`)
+      .post("/api/mood/archive", foundCity)
       .then((res) => {
-        if (res.data.success) {
-          setTrendData(res.data);
-        } else {
-          setTrendData(fallbackData);
+        if (res.data && typeof res.data === "object" && res.data.city) {
+          setCityData(res.data);
         }
       })
       .catch(() => {
-        setTrendData(fallbackData);
+        console.warn("⚠️ Archive API failed. Using local storage data.");
       });
-  }, [city_name]);
+  }, [city_name, navigate]);
 
-  if (!trendData) return <div className="p-6 text-white">Loading trends...</div>;
+  if (!cityData) {
+    return (
+      <div className="min-h-screen text-white flex items-center justify-center">
+        Loading trends...
+      </div>
+    );
+  }
 
-  const { city, historical, forecast } = trendData;
+  const {
+    city,
+    headline,
+    mood_metrics = {},
+    weather = {},
+    trending_topics = [],
+  } = cityData;
 
   return (
-    <div className="min-h-screen bg-zinc-900 text-white p-6 flex flex-col gap-8">
-      {/* Page Header */}
+    <div className="min-h-screen text-white p-6 flex flex-col gap-8">
+      {/* Navbar */}
+      <nav className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-extrabold">🌐 Aura.AI</h1>
+        <a
+          href="/vibe"
+          className="px-4 py-2 bg-zinc-800 rounded-xl hover:bg-zinc-700 transition"
+        >
+          ⬅ Back
+        </a>
+      </nav>
+
+      {/* City Header */}
       <div className="text-center">
-        <h1 className="text-4xl font-extrabold mb-2">📊 Mood Trends & Forecast</h1>
-        <p className="text-lg text-zinc-400">City: {city}</p>
-      </div>
-
-      {/* Historical Trend Line Chart */}
-      <div className="bg-zinc-800 p-6 rounded-2xl shadow-lg max-w-5xl mx-auto w-full">
-        <h2 className="text-2xl font-bold mb-4">📈 Historical Sentiment Trend</h2>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={historical}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#555" />
-            <XAxis dataKey="date" stroke="#ccc" />
-            <YAxis domain={[-1, 1]} stroke="#ccc" />
-            <Tooltip />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="score"
-              stroke="#4ade80"
-              strokeWidth={3}
-              dot={true}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Weather Correlation (Bar Chart) */}
-      <div className="bg-zinc-800 p-6 rounded-2xl shadow-lg max-w-5xl mx-auto w-full">
-        <h2 className="text-2xl font-bold mb-4">🌦 Weather Correlation</h2>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={historical}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#555" />
-            <XAxis dataKey="date" stroke="#ccc" />
-            <YAxis domain={[-1, 1]} stroke="#ccc" />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="score" fill="#60a5fa" name="Sentiment Score" />
-          </BarChart>
-        </ResponsiveContainer>
-        <p className="text-sm text-zinc-400 mt-4">
-          Note: Bars show mood scores; check tooltip for weather conditions.
+        <h1 className="text-4xl font-extrabold mb-2">{city}</h1>
+        <p className="text-lg font-semibold">
+          {mood_metrics.mood_label || "Unknown"}{" "}
+          {mood_metrics.mood_emoji || getMoodEmoji(mood_metrics.mood_label)}
+          {" • Score: "}
+          {mood_metrics.avg_sentiment?.toFixed(2) || 0}
         </p>
       </div>
 
-      {/* Forecast Section */}
-      <div className="bg-zinc-800 p-6 rounded-2xl shadow-lg max-w-3xl mx-auto w-full">
-        <h2 className="text-2xl font-bold mb-4">🔮 Forecasted Mood Shifts</h2>
-        <ul className="space-y-3">
-          {forecast.map((f, idx) => (
-            <li
-              key={idx}
-              className="flex justify-between border-b border-zinc-700 pb-2"
-            >
-              <span>{f.date}</span>
-              <span className={`font-semibold ${getColor(f.emotion)}`}>
-                {f.emotion} ({f.predicted_score})
-              </span>
-            </li>
-          ))}
+      {/* Headline */}
+      {headline && (
+        <div className="text-center">
+          <p className="text-2xl font-bold text-indigo-400">📰 {headline}</p>
+        </div>
+      )}
+
+      {/* Weather */}
+      <div className="flex justify-center">
+        <div className="p-6 rounded-2xl shadow-lg w-72 bg-black/30 backdrop-blur-md">
+          <h3 className="text-xl font-semibold mb-2">🌦 Weather</h3>
+          <p>
+            {weather.temperature_c}°C • {weather.condition}
+          </p>
+          <p className="text-sm text-zinc-400">
+            Humidity: {weather.humidity}% • Wind: {weather.wind_kph} km/h
+          </p>
+        </div>
+      </div>
+
+      {/* Sentiment Distribution */}
+      <div className="max-w-3xl mx-auto p-6 rounded-2xl shadow-lg bg-black/30 backdrop-blur-md">
+        <h3 className="text-xl font-bold mb-4">📊 Sentiment Distribution</h3>
+        <ul className="space-y-2">
+          <li>😀 Positive: {mood_metrics.sentiment_distribution?.positive || 0}%</li>
+          <li>😡 Negative: {mood_metrics.sentiment_distribution?.negative || 0}%</li>
+          <li>😐 Neutral: {mood_metrics.sentiment_distribution?.neutral || 0}%</li>
         </ul>
+      </div>
+
+      {/* Trending Topics */}
+      <div className="max-w-3xl mx-auto p-6 rounded-2xl shadow-lg bg-black/30 backdrop-blur-md">
+        <h3 className="text-xl font-bold mb-4">📈 Trending Topics</h3>
+        <div className="flex flex-wrap gap-3">
+          {(trending_topics || []).map((topic, idx) => (
+            <span
+              key={idx}
+              className="px-4 py-2 bg-indigo-600 rounded-full text-sm shadow"
+            >
+              #{topic}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
