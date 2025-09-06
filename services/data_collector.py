@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 
 class AuraDataCollector:
     def __init__(self, openrouter_api_key: str):
-        self.news_api_key = "pub_1e11c85ce5a947b881f961784d8f3ea0"
-        self.weather_api_key = "03f7cea1d6ef4a0a8e3133314252207"
-        self.twitter_api_key = "984d78e1femsh2af122397b07360p15059bjsn900a6a3b90fa"
+        self.news_api_key = "secret_newsdata.io_key"
+        self.weather_api_key = "secret_weatherAPI_key"
+        self.twitter_api_key = "secret_RapidAPI_key"
         self.openrouter_api_key = openrouter_api_key
         
         self.analyzer = SentimentIntensityAnalyzer()
